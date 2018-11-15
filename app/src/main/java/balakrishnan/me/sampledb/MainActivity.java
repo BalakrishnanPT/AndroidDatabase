@@ -45,7 +45,8 @@ public class MainActivity extends AppCompatActivity {
         //DB Configuration we can use default configuration or custom configurations
         RealmConfiguration config = new RealmConfiguration.Builder()
                 .name(getPackageName() + ".realm")
-                .schemaVersion(1)
+                .schemaVersion(3)
+                .migration(new Migration())
                 .modules(new DomesticAnimalsModule())
                 .build();
 
