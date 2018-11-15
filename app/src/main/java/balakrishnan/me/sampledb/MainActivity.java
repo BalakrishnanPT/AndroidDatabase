@@ -54,12 +54,11 @@ public class MainActivity extends AppCompatActivity {
 
         //Query
         final RealmResults<Dog> puppies = realm.where(Dog.class).findAll();
-
         Log.d(TAG, "realmSetup: number of dogs" + puppies.size());
 
         puppies.addChangeListener((results, changeSet) -> {
             // Query results are updated in real time with fine grained notifications.
-            Log.d(TAG, "onChange: Puppies" + changeSet.getInsertions());// => [0] is added.
+            Log.d(TAG, "onChange: Puppies" + changeSet.getInsertions());
         });
 
         final RealmResults<Cat> kitten = realm.where(Cat.class).findAll();
@@ -71,7 +70,9 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG, "onChange: Puppies" + cat.getName());
             }
         });
-        addCat(1);
+
+        addCat(5);
+        deleteRecord(1);
 
         //CreateObject example
         realm.executeTransaction(realm -> {
@@ -79,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
             dog.setName("Fido");
             dog.setAge(5);
         });
+        updateRecord(2, "ChangedName");
     }
 
     /**
@@ -92,8 +94,52 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < count; i++) {
             Cat temp = new Cat();
             temp.setName("Cat " + i);
+            temp.setAge(i);
             realm.copyToRealm(temp);
         }
         realm.commitTransaction();
     }
+
+    public void deleteRecord(int t) {
+
+/*
+        final RealmResults<Cat> students = realm.where(Cat.class).findAll();
+
+        Cat kitten = students.where().equalTo("age", t).findFirst();
+
+        if (kitten != null) {
+
+            if (!realm.isInTransaction()) {
+                realm.beginTransaction();
+            }
+
+            kitten.deleteFromRealm();
+
+            realm.commitTransaction();
+        }
+*/
+
+        realm.executeTransactionAsync(localRealm -> localRealm
+                        .where(Cat.class)
+                        .equalTo("age", t)
+                        .findAll().deleteAllFromRealm(),
+                () -> realm.close(), error -> realm.close());
+
+    }
+
+    public void updateRecord(int t, String name) {
+//        Async update
+        realm.executeTransactionAsync(localRealm -> localRealm
+                        .where(Cat.class)
+                        .equalTo("age", t)
+                        .findAll().setValue("name", name),
+                () -> realm.close(), error -> realm.close());
+//        Sync update
+        realm.executeTransaction(localRealm -> localRealm
+                .where(Cat.class)
+                .equalTo("age", t + 1)
+                .findAll().setValue("name", name + "sync"));
+        realm.close();
+    }
+
 }
