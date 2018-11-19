@@ -1,145 +1,101 @@
 package balakrishnan.me.sampledb;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.annotation.TargetApi;
+import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
 
-import java.util.Objects;
+import io.realm.ObjectServerError;
+import io.realm.SyncCredentials;
+import io.realm.SyncUser;
 
-import balakrishnan.me.sampledb.Module.DomesticAnimalsModule;
-import balakrishnan.me.sampledb.model.Cat;
-import balakrishnan.me.sampledb.model.Dog;
-import io.realm.Realm;
-import io.realm.RealmConfiguration;
-import io.realm.RealmResults;
+import static balakrishnan.me.sampledb.Constants.AUTH_URL;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
-    private Realm realm;
 
-    /**
-     * There is no auto increment annotation in Realm hence we have to do it manually
-     *
-     * @param c Class get primary key
-     * @return unique primary value
-     */
-    public static int getPrimaryKey(Class c) {
-        Realm realm = Realm.getDefaultInstance();
-
-        String primaryKeyFied = Objects.requireNonNull(realm.getSchema().get(c.getSimpleName())).getPrimaryKey();
-        if (realm.where(c).max(primaryKeyFied) == null)
-            return 1;
-        int value = realm.where(c).max(primaryKeyFied).intValue();
-        return value + 1;
-    }
+    private EditText mNicknameTextView;
+    private View mProgressView;
+    private View mLoginFormView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        realmSetup();
+//        realmSetup();
+
+        if (SyncUser.current() != null) {
+            this.goToItemsActivity();
+        }
+
+        // Set up the login form.
+        mNicknameTextView = findViewById(R.id.nickname);
+        Button loginButton = findViewById(R.id.login_button);
+        loginButton.setOnClickListener(view -> attemptLogin());
+        mLoginFormView = findViewById(R.id.login_form);
+        mProgressView = findViewById(R.id.login_progress);
     }
 
-    private void realmSetup() {
 
-        //DB Configuration we can use default configuration or custom configurations
-        RealmConfiguration config = new RealmConfiguration.Builder()
-                .name(getPackageName() + ".realm")
-                .schemaVersion(3)
-                .migration(new Migration())
-                .modules(new DomesticAnimalsModule())
-                .build();
+    private void attemptLogin() {
+        // Reset errors.
+        mNicknameTextView.setError(null);
+        // Store values at the time of the login attempt.
+        String nickname = mNicknameTextView.getText().toString();
+        showProgress(true);
 
-        realm = Realm.getInstance(config);
+        SyncCredentials credentials = SyncCredentials.nickname(nickname, false);
+        SyncUser.logInAsync(credentials, AUTH_URL, new SyncUser.Callback<SyncUser>() {
+            @Override
+            public void onSuccess(SyncUser user) {
+                showProgress(false);
+                goToItemsActivity();
+            }
 
-        //Query
-        final RealmResults<Dog> puppies = realm.where(Dog.class).findAll();
-        Log.d(TAG, "realmSetup: number of dogs" + puppies.size());
-
-        puppies.addChangeListener((results, changeSet) -> {
-            // Query results are updated in real time with fine grained notifications.
-            Log.d(TAG, "onChange: Puppies" + changeSet.getInsertions());
-        });
-
-        final RealmResults<Cat> kitten = realm.where(Cat.class).findAll();
-        Log.d(TAG, "realmSetup: number of kitten" + kitten.size()); // => 0 because no dogs have been added to the Realm yet// Listeners will be notified when data changes
-
-        kitten.addChangeListener((results, changeSet) -> {
-            // Query results are updated in real time with fine grained notifications.
-            for (Cat cat : results) {
-                Log.d(TAG, "onChange: Puppies" + cat.getName());
+            @Override
+            public void onError(ObjectServerError error) {
+                showProgress(false);
+                mNicknameTextView.setError("Uh oh something went wrong! (check your logcat please)");
+                mNicknameTextView.requestFocus();
+                Log.e("Login error", error.toString());
             }
         });
-
-        addCat(5);
-        deleteRecord(1);
-
-        //CreateObject example
-        realm.executeTransaction(realm -> {
-            Dog dog = realm.createObject(Dog.class);
-            dog.setName("Fido");
-            dog.setAge(5);
-        });
-        updateRecord(2, "ChangedName");
     }
+
 
     /**
-     * This function explains copyToRealm
-     *
-     * @param count
+     * Shows the progress UI and hides the login form.
      */
-    public void addCat(final int count) {
-        // Copy the object to Realm. Any further changes must happen on realmUser
-        realm.beginTransaction();
-        for (int i = 0; i < count; i++) {
-            Cat temp = new Cat();
-            temp.setName("Cat " + i);
-            temp.setAge(i);
-            realm.copyToRealm(temp);
-        }
-        realm.commitTransaction();
-    }
-
-    public void deleteRecord(int t) {
-
-/*
-        final RealmResults<Cat> students = realm.where(Cat.class).findAll();
-
-        Cat kitten = students.where().equalTo("age", t).findFirst();
-
-        if (kitten != null) {
-
-            if (!realm.isInTransaction()) {
-                realm.beginTransaction();
+    @TargetApi(Build.VERSION_CODES.HONEYCOMB_MR2)
+    private void showProgress(final boolean show) {
+        int shortAnimTime = getResources().getInteger(android.R.integer.config_shortAnimTime);
+        mLoginFormView.setVisibility(show ? View.GONE : View.VISIBLE);
+        mLoginFormView.animate().setDuration(shortAnimTime).alpha(
+                show ? 0 : 1).setListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                mLoginFormView.setVisibility(show ? View.GONE : View.VISIBLE);
             }
-
-            kitten.deleteFromRealm();
-
-            realm.commitTransaction();
-        }
-*/
-
-        realm.executeTransactionAsync(localRealm -> localRealm
-                        .where(Cat.class)
-                        .equalTo("age", t)
-                        .findAll().deleteAllFromRealm(),
-                () -> realm.close(), error -> realm.close());
-
+        });
+        mProgressView.setVisibility(show ? View.VISIBLE : View.GONE);
+        mProgressView.animate().setDuration(shortAnimTime).alpha(
+                show ? 1 : 0).setListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                mProgressView.setVisibility(show ? View.VISIBLE : View.GONE);
+            }
+        });
     }
 
-    public void updateRecord(int t, String name) {
-//        Async update
-        realm.executeTransactionAsync(localRealm -> localRealm
-                        .where(Cat.class)
-                        .equalTo("age", t)
-                        .findAll().setValue("name", name),
-                () -> realm.close(), error -> realm.close());
-//        Sync update
-        realm.executeTransaction(localRealm -> localRealm
-                .where(Cat.class)
-                .equalTo("age", t + 1)
-                .findAll().setValue("name", name + "sync"));
-        realm.close();
+    private void goToItemsActivity() {
+        Intent intent = new Intent(MainActivity.this, ItemsActivity.class);
+        startActivity(intent);
     }
-
 }

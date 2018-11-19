@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">SampleDB</string>
+    <string name="action_settings">logout</string>
+    <string name="title_activity_items">Things ToDo</string>
 </resources>
